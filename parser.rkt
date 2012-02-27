@@ -21,8 +21,8 @@
 (define (parse-error msg)
   (list 'parse-error msg))
 
-(define (merge-errors list)
-  '())
+(define (merge-errors . list)
+  list)
 
 ;;; quick interlude to define an infinitely back-trackable view of a
 ;;; stream that we can use to efficiently always allow backtracking
@@ -253,7 +253,7 @@ will then be parsed"
   (p-let ((f (letter))
 	  (r (many (either (letter)
 			   (digit)))))
-    (list->string (cons f r))))
+    (always (list->string (cons f r)))))
 
 
 (defparser (ben-integer)
@@ -262,5 +262,23 @@ will then be parsed"
 	    (positive-int)
 	    (negative-int))))
 
+(defparser (block)
+  (between (char #\{) (char #\})
+           (many1 (expression))))
 
+(defparser (expression)
+  (choice (assignment)))
 
+(defparser (literal)
+  (choice (symbol)
+          (positive-int)
+          (negative-int)))
+
+(defparser (assignment)
+  (p-let ((var (symbol))
+          (_ (char #\=))
+          (value (choice
+                  (expression)
+                  (literal))))
+          
+    (always (list 'assign var value))))
