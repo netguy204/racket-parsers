@@ -8,8 +8,8 @@
 			   (digit)))))
     (always (list->string (cons f r)))))
 
-(define (skip-whitespace parser)
-  (nxt (many (whitespace)) parser))
+(define (skip-many skipped parser)
+  (nxt (many skipped) parser))
 
 (defparser (ben-integer)
   (between (char #\i) (char #\e)
@@ -17,13 +17,22 @@
 	    (positive-int)
 	    (negative-int))))
 
+(defparser (expression-break)
+  (choice (char #\n)
+          (char #\;)))
+
+(defparser (horizontal-whitespace)
+  (choice (char #\space)
+          (char #\tab)))
+
 (defparser (block)
-  (p-let ((exprs (between (char #\{) (char #\})
-                          (many1 (expression)))))
-     (always (list 'block exprs))))
+  (between (char #\{) (char #\})
+    (p-let ((first (expression))
+            (rest (many (skip-many (expression-break) (expression)))))
+      (always (cons 'block (cons first rest))))))
 
 (defparser (expression)
-  (skip-whitespace
+  (skip-many (whitespace)
    (choice (assignment))))
 
 (defparser (literal)
@@ -33,8 +42,8 @@
 
 (defparser (assignment)
   (p-let ((var (symbol))
-          (_ (skip-whitespace (char #\=)))
-          (value (skip-whitespace
+          (_ (skip-many (whitespace) (char #\=)))
+          (value (skip-many (whitespace)
                   (choice
                    (expression)
                    (literal)))))
@@ -56,6 +65,8 @@
   (run-parser p (open-input-string str)))
 
 ;;; and finally, doing something
-(parse-string (block) "{a = b = 16}")
+(parse-string (block) "{
+a = b = 16; c = 12
+d = 15}")
 
 ;;; yeah, that was exciting.
