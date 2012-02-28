@@ -1,22 +1,32 @@
 #lang racket
 
+(provide
+ always
+ nxt
+ bind
+ defparser
+ >>
+ p-let
+ never
+ either
+ token
+ many
+ choice
+ eof
+ satisfy
+ char
+ any-char
+ digit
+ letter
+ between
+ many1
+ positive-int
+ negative-int
+ whitespace
+ state-from-stream
+ *position-zero*)
+
 (require racket/class)
-
-;;; useful for testing
-(define (identity2 name) (lambda (a b) (list name a b)))
-(define (identity1 name) (lambda (a) (list name a)))
-(define (identity* name) (lambda a (cons name a)))
-
-;;; how to use it
-;((always2 "foo") nil (identity2 'cok) (identity2 'cerr) (identity2 'eok) (identity1 'eerr))
-;(set! *s* (state-from-stream (make-string-buffer "foobar") *position-zero*))
-
-(define (run-parser p input)
-  (p (state-from-stream input *position-zero*)
-     (identity2 'cok) (identity1 'cerr) (identity2 'eok) (identity1 'eerr)))
-
-(define (parse-string p str)
-  (run-parser p (open-input-string str)))
 
 (define (parse-error msg)
   (list 'parse-error msg))
@@ -87,7 +97,6 @@ by evaluating body"
          [position pos])))
 
 ;;; that's the end of the interlude... on with the combinators
-
 (define (always x)
   "always succeed with x as a value"
   (lambda (state cok cerr eok err)
@@ -121,7 +130,7 @@ will then be parsed"
        (lambda (state cok cerr eok eerr)
          (let ((parser (begin . body)))
            (parser state cok cerr eok eerr)))))))
-  
+
 (define-syntax >>
   (syntax-rules ()
     ((>> only-one)
@@ -172,8 +181,6 @@ will then be parsed"
 		      (eok '() state))))
       (p state (pcok '()) cerr many-err peerr))))
 
-;; skipping times
-
 (define (choice . parsers)
   (if (null? parsers)
       (never)
@@ -194,23 +201,11 @@ will then be parsed"
 (define (any-char)
   (satisfy (lambda (ch) #t)))
 
-(define (char-in-bounds? ch lower upper)
-  (and
-   (>= (char->integer ch) (char->integer lower))
-   (<= (char->integer ch) (char->integer upper))))
-
-(define (digit? ch)
-  (char-in-bounds? ch #\0 #\9))
-
-(define (alpha? ch)
-  (or (char-in-bounds? ch #\a #\z)
-      (char-in-bounds? ch #\A #\Z)))
-
 (define (digit)
-  (satisfy (lambda (val) (digit? val))))
+  (satisfy (lambda (val) (char-numeric? val))))
 
 (define (letter)
-  (satisfy (lambda (val) (alpha? val))))
+  (satisfy (lambda (val) (char-alphabetic? val))))
 
 (define (between open close p)
   (p-let ((_ open)
@@ -223,62 +218,17 @@ will then be parsed"
 	  (xs (many p)))
     (always (cons x xs))))
 
-(define (char->number ch)
-  (- (char->integer ch) (char->integer #\0)))
-
-(define (string-list->integer digits)
-  (let loop ((digits (reverse digits))
-             (place 1)
-             (value 0))
-    (if (null? digits)
-        value
-        (loop (cdr digits)
-              (* place 10)
-              (+ value (* (char->number (car digits)) place))))))
+(define (list->number chars)
+  (string->number (list->string chars)))
 
 (defparser (positive-int)
   (p-let ((digits (many1 (digit))))
-    (always (string-list->integer digits))))
+    (always (list->number digits))))
 
 (defparser (negative-int)
   (p-let ((num (>> (char #\-) (positive-int))))
     (always (- num))))
 
 (defparser (whitespace)
-  (many1 (choice (char #\newline)
-		 (char #\space)
-		 (char #\tab))))
+  (many1 (satisfy (lambda (val) (char-whitespace? val)))))
 
-(defparser (symbol)
-  (p-let ((f (letter))
-	  (r (many (either (letter)
-			   (digit)))))
-    (always (list->string (cons f r)))))
-
-
-(defparser (ben-integer)
-  (between (char #\i) (char #\e)
-	   (either
-	    (positive-int)
-	    (negative-int))))
-
-(defparser (block)
-  (between (char #\{) (char #\})
-           (many1 (expression))))
-
-(defparser (expression)
-  (choice (assignment)))
-
-(defparser (literal)
-  (choice (symbol)
-          (positive-int)
-          (negative-int)))
-
-(defparser (assignment)
-  (p-let ((var (symbol))
-          (_ (char #\=))
-          (value (choice
-                  (expression)
-                  (literal))))
-          
-    (always (list 'assign var value))))
