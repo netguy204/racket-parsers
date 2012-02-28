@@ -8,6 +8,8 @@
 			   (digit)))))
     (always (list->string (cons f r)))))
 
+(define (skip-whitespace parser)
+  (nxt (many (whitespace)) parser))
 
 (defparser (ben-integer)
   (between (char #\i) (char #\e)
@@ -21,7 +23,8 @@
      (always (list 'block exprs))))
 
 (defparser (expression)
-  (choice (assignment)))
+  (skip-whitespace
+   (choice (assignment))))
 
 (defparser (literal)
   (choice (symbol)
@@ -30,10 +33,11 @@
 
 (defparser (assignment)
   (p-let ((var (symbol))
-          (_ (char #\=))
-          (value (choice
-                  (expression)
-                  (literal))))
+          (_ (skip-whitespace (char #\=)))
+          (value (skip-whitespace
+                  (choice
+                   (expression)
+                   (literal)))))
           
     (always (list 'assign var value))))
 
@@ -43,8 +47,6 @@
 (define (identity* name) (lambda a (cons name a)))
 
 ;;; how to use it
-;((always2 "foo") nil (identity2 'cok) (identity2 'cerr) (identity2 'eok) (identity1 'eerr))
-;(set! *s* (state-from-stream (make-string-buffer "foobar") *position-zero*))
 
 (define (run-parser p input)
   (p (state-from-stream input *position-zero*)
@@ -52,3 +54,8 @@
 
 (define (parse-string p str)
   (run-parser p (open-input-string str)))
+
+;;; and finally, doing something
+(parse-string (block) "{a = b = 16}")
+
+;;; yeah, that was exciting.
